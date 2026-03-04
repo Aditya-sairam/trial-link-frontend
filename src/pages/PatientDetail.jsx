@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getPatient } from "../services/patientApi";
+import { getPatient, getTrialSuggestions } from "../services/patientApi";
 
 // ── Small reusable components ─────────────────────────────────────────────────
 
@@ -43,6 +43,104 @@ const conditionColor = { active: "red", resolved: "green", remission: "blue", re
 const medColor = { active: "blue", stopped: "gray", completed: "green" };
 const critColor = { high: "red", low: "yellow", "unable-to-assess": "gray" };
 
+// ── Trial Suggestions Tab ─────────────────────────────────────────────────────
+function TrialSuggestionsTab() {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [fetched, setFetched] = useState(false);
+
+  const handleFetch = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await getTrialSuggestions();
+      console.log("Trial suggestions response:", result);
+      setData(result);
+      setFetched(true);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Section title="🧬 Clinical Trial Suggestions">
+      {!fetched && (
+        <div className="text-center py-10 space-y-4">
+          <p className="text-gray-500 text-sm">
+            Click below to generate your clinical profile summary and match vector.
+          </p>
+          <button
+            onClick={handleFetch}
+            disabled={loading}
+            className="btn-primary px-6 py-2.5"
+          >
+            {loading ? "⏳ Generating..." : "Generate Trial Matches"}
+          </button>
+        </div>
+      )}
+
+      {error && (
+        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+          ❌ {error}
+        </div>
+      )}
+
+      {data && (
+        <div className="space-y-6">
+          {/* Patient Summary */}
+          <div>
+            <h4 className="text-sm font-semibold text-gray-700 mb-2">
+              Patient Profile Summary
+            </h4>
+            <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 text-sm text-gray-700 leading-relaxed">
+              {data.summary}
+            </div>
+          </div>
+
+          {/* Embedding Info */}
+          <div>
+            <h4 className="text-sm font-semibold text-gray-700 mb-2">
+              Embedding Vector
+            </h4>
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-2">
+              {data.embedding_dimensions && (
+                <p className="text-xs text-gray-500">
+                  Dimensions:{" "}
+                  <span className="font-mono font-medium text-gray-700">
+                    {data.embedding_dimensions}
+                  </span>
+                </p>
+              )}
+              {data.embedding && (
+                <p className="text-xs text-gray-500">
+                  First 5 values:{" "}
+                  <span className="font-mono text-gray-700">
+                    [{data.embedding.slice(0, 5).map(v => v.toFixed(6)).join(", ")} ...]
+                  </span>
+                </p>
+              )}
+              <p className="text-xs text-gray-400 italic mt-1">
+                This vector will be used to match against clinical trial embeddings.
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={handleFetch}
+            disabled={loading}
+            className="btn-secondary text-xs"
+          >
+            {loading ? "Regenerating..." : "↺ Regenerate"}
+          </button>
+        </div>
+      )}
+    </Section>
+  );
+}
+
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function PatientDetail() {
   const { id } = useParams();
@@ -66,12 +164,13 @@ export default function PatientDetail() {
   const d = patient.demographics;
 
   const TABS = [
-    { key: "conditions",   label: "Conditions",   count: patient.conditions?.length },
-    { key: "medications",  label: "Medications",  count: patient.medications?.length },
-    { key: "observations", label: "Observations", count: patient.observations?.length },
-    { key: "procedures",   label: "Procedures",   count: patient.procedures?.length },
-    { key: "allergies",    label: "Allergies",    count: patient.allergies?.length },
-    { key: "lifestyle",    label: "Lifestyle" },
+    { key: "conditions",        label: "Conditions",           count: patient.conditions?.length },
+    { key: "medications",       label: "Medications",          count: patient.medications?.length },
+    { key: "observations",      label: "Observations",         count: patient.observations?.length },
+    { key: "procedures",        label: "Procedures",           count: patient.procedures?.length },
+    { key: "allergies",         label: "Allergies",            count: patient.allergies?.length },
+    { key: "lifestyle",         label: "Lifestyle" },
+    { key: "trial-suggestions", label: "🧬 Trial Suggestions" },
   ];
 
   return (
@@ -104,12 +203,12 @@ export default function PatientDetail() {
       </Section>
 
       {/* Tabs */}
-      <div className="border-b border-gray-200 flex gap-1">
+      <div className="border-b border-gray-200 flex gap-1 overflow-x-auto">
         {TABS.map(tab => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
-            className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
+            className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap ${
               activeTab === tab.key
                 ? "border-blue-600 text-blue-600"
                 : "border-transparent text-gray-500 hover:text-gray-700"
@@ -284,6 +383,9 @@ export default function PatientDetail() {
             }
           </Section>
         )}
+
+        {/* Trial Suggestions */}
+        {activeTab === "trial-suggestions" && <TrialSuggestionsTab />}
       </div>
     </div>
   );

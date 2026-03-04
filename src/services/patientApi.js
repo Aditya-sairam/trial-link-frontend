@@ -81,9 +81,13 @@ export const deletePatient = async (patientId) => {
 };
 
 /**
- * GET /me
- * Returns the current logged-in patient's own profile
+ * GET /me/trial-suggestions
+ * Returns patient text summary + embedding
  */
+export const getTrialSuggestions = async () => {
+  const { data } = await api.get("/me/trial-suggestions");
+  return data;
+};
 export const getMyProfile = async () => {
   const { data } = await api.get("/me");
   return data;
@@ -92,5 +96,3 @@ export const healthCheck = async () => {
   const { data } = await api.get("/health");
   return data;
 };
-
-
