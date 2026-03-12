@@ -70,14 +70,14 @@ function TrialSuggestionsTab() {
       {!fetched && (
         <div className="text-center py-10 space-y-4">
           <p className="text-gray-500 text-sm">
-            Click below to generate your clinical profile summary and match vector.
+            Click below to find clinical trials that match your profile.
           </p>
           <button
             onClick={handleFetch}
             disabled={loading}
             className="btn-primary px-6 py-2.5"
           >
-            {loading ? "⏳ Generating..." : "Generate Trial Matches"}
+            {loading ? "⏳ Finding matches..." : "Find Matching Trials"}
           </button>
         </div>
       )}
@@ -90,50 +90,67 @@ function TrialSuggestionsTab() {
 
       {data && (
         <div className="space-y-6">
+
           {/* Patient Summary */}
           <div>
             <h4 className="text-sm font-semibold text-gray-700 mb-2">
-              Patient Profile Summary
+              Your Clinical Profile Summary
             </h4>
             <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 text-sm text-gray-700 leading-relaxed">
               {data.summary}
             </div>
           </div>
 
-          {/* Embedding Info */}
+          {/* Matched Trials */}
           <div>
-            <h4 className="text-sm font-semibold text-gray-700 mb-2">
-              Embedding Vector
+            <h4 className="text-sm font-semibold text-gray-700 mb-3">
+              Matched Trials
+              <span className="ml-2 text-xs font-normal text-gray-400">
+                {data.total_matches} found
+              </span>
             </h4>
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-2">
-              {data.embedding_dimensions && (
-                <p className="text-xs text-gray-500">
-                  Dimensions:{" "}
-                  <span className="font-mono font-medium text-gray-700">
-                    {data.embedding_dimensions}
-                  </span>
-                </p>
-              )}
-              {data.embedding && (
-                <p className="text-xs text-gray-500">
-                  First 5 values:{" "}
-                  <span className="font-mono text-gray-700">
-                    [{data.embedding.slice(0, 5).map(v => v.toFixed(6)).join(", ")} ...]
-                  </span>
-                </p>
-              )}
-              <p className="text-xs text-gray-400 italic mt-1">
-                This vector will be used to match against clinical trial embeddings.
-              </p>
-            </div>
+
+            {data.matched_trials?.length === 0 ? (
+              <p className="text-sm text-gray-400">No matching trials found.</p>
+            ) : (
+              <div className="space-y-2">
+                {data.matched_trials?.map((nctId, i) => (
+                  <a
+                    key={nctId}
+                    href={`https://clinicaltrials.gov/study/${nctId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:border-blue-400 hover:bg-blue-50 transition-colors group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs font-bold text-gray-400 w-5">
+                        #{i + 1}
+                      </span>
+                      <div>
+                        <p className="text-sm font-medium text-gray-800 font-mono">
+                          {nctId}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          View on ClinicalTrials.gov ↗
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-blue-500 text-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                      →
+                    </span>
+                  </a>
+                ))}
+              </div>
+            )}
           </div>
 
+          {/* Regenerate */}
           <button
             onClick={handleFetch}
             disabled={loading}
             className="btn-secondary text-xs"
           >
-            {loading ? "Regenerating..." : "↺ Regenerate"}
+            {loading ? "Finding matches..." : "↺ Refresh Matches"}
           </button>
         </div>
       )}

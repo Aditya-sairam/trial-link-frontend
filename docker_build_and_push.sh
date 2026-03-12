@@ -20,7 +20,7 @@ echo "Full image name: $FULL_IMAGE_NAME"
 
 # ===== DETERMINE SCRIPT DIRECTORY =====
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-DOCKERFILE_PATH="$SCRIPT_DIR/Dockerfile"
+DOCKERFILE_PATH="$SCRIPT_DIR/dockerfile"
 CONTEXT_PATH="$SCRIPT_DIR"
 
 echo "Dockerfile path: $DOCKERFILE_PATH"
