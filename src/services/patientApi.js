@@ -82,11 +82,20 @@ export const deletePatient = async (patientId) => {
 
 /**
  * GET /me/trial-suggestions
- * Returns patient text summary + embedding
+ * Publishes patient_id to Pub/Sub — triggers RAG pipeline
  */
 export const getTrialSuggestions = async () => {
   const { data } = await api.get("/me/trial-suggestions");
-  return data;
+  return data; // { status: "processing", patient_id, message_id }
+};
+
+/**
+ * GET /me/trial-suggestions/results
+ * Polls for RAG pipeline results from Firestore
+ */
+export const getTrialSuggestionsResults = async () => {
+  const { data } = await api.get("/me/trial-suggestions/results");
+  return data; // { status: "not_started" | "processing" | "completed" | "failed" }
 };
 export const getMyProfile = async () => {
   const { data } = await api.get("/me");

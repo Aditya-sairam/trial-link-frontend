@@ -8,7 +8,7 @@
 set -e  # Exit immediately if a command fails
 
 # ===== CONFIG =====
-PROJECT_ID="mlops-test-project-486922"
+PROJECT_ID="triallink-eval-001"
 REGION="us-central1"
 REPO_NAME="trial-link-frontend-repo-dev"
 IMAGE_NAME="trial-link-react-image"

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getPatient, getTrialSuggestions } from "../services/patientApi";
+import { getPatient, getTrialSuggestions, getTrialSuggestionsResults } from "../services/patientApi";
 
 // ── Small reusable components ─────────────────────────────────────────────────
 
@@ -45,115 +45,185 @@ const critColor = { high: "red", low: "yellow", "unable-to-assess": "gray" };
 
 // ── Trial Suggestions Tab ─────────────────────────────────────────────────────
 function TrialSuggestionsTab() {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [fetched, setFetched] = useState(false);
+  const [status, setStatus]       = useState("idle");    // idle | submitting | processing | completed | failed
+  const [results, setResults]     = useState(null);
+  const [error, setError]         = useState(null);
+  const [pollInterval, setPollInterval] = useState(null);
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => { if (pollInterval) clearInterval(pollInterval); };
+  }, [pollInterval]);
+
+  const stopPolling = (intervalId) => {
+    clearInterval(intervalId);
+    setPollInterval(null);
+  };
+
+  const startPolling = () => {
+    const intervalId = setInterval(async () => {
+      try {
+        const data = await getTrialSuggestionsResults();
+        console.log("Polling result:", data);
+
+        if (["completed", "guardrail_flagged", "guardrail_blocked", "failed"].includes(data.status)) {
+          setResults(data);
+          setStatus("completed");
+          stopPolling(intervalId);
+        } else if (data.status === "failed") {
+          setError(data.error || "Something went wrong.");
+          setStatus("failed");
+          stopPolling(intervalId);
+        }
+        // if "processing" or "not_started" — keep polling
+      } catch (err) {
+        setError(err.message);
+        setStatus("failed");
+        stopPolling(intervalId);
+      }
+    }, 4000); // poll every 4 seconds
+
+    setPollInterval(intervalId);
+  };
 
   const handleFetch = async () => {
-    setLoading(true);
+    // Stop any existing poll
+    if (pollInterval) stopPolling(pollInterval);
+
+    setStatus("submitting");
     setError(null);
+    setResults(null);
+
     try {
-      const result = await getTrialSuggestions();
-      console.log("Trial suggestions response:", result);
-      setData(result);
-      setFetched(true);
+      await getTrialSuggestions(); // triggers Pub/Sub
+      setStatus("processing");
+      startPolling();              // start polling for results
     } catch (err) {
       setError(err.message);
-    } finally {
-      setLoading(false);
+      setStatus("failed");
     }
   };
 
   return (
     <Section title="🧬 Clinical Trial Suggestions">
-      {!fetched && (
+
+      {/* Initial state */}
+      {status === "idle" && (
         <div className="text-center py-10 space-y-4">
           <p className="text-gray-500 text-sm">
             Click below to find clinical trials that match your profile.
           </p>
-          <button
-            onClick={handleFetch}
-            disabled={loading}
-            className="btn-primary px-6 py-2.5"
-          >
-            {loading ? "⏳ Finding matches..." : "Find Matching Trials"}
+          <button onClick={handleFetch} className="btn-primary px-6 py-2.5">
+            Find Matching Trials
           </button>
         </div>
       )}
 
-      {error && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-          ❌ {error}
+      {/* Submitting */}
+      {status === "submitting" && (
+        <div className="text-center py-10 space-y-3">
+          <p className="text-2xl animate-spin inline-block">⏳</p>
+          <p className="text-gray-500 text-sm">Submitting your request...</p>
         </div>
       )}
 
-      {data && (
+      {/* Processing — show animated waiting state */}
+      {status === "processing" && (
+        <div className="text-center py-10 space-y-4">
+          <div className="flex justify-center gap-1">
+            {[0, 1, 2].map(i => (
+              <div
+                key={i}
+                className="w-2.5 h-2.5 bg-blue-500 rounded-full animate-bounce"
+                style={{ animationDelay: `${i * 0.15}s` }}
+              />
+            ))}
+          </div>
+          <p className="text-gray-600 text-sm font-medium">Analyzing your profile...</p>
+          <p className="text-gray-400 text-xs">
+            Matching against clinical trials database. This may take 30-60 seconds.
+          </p>
+        </div>
+      )}
+
+      {/* Error */}
+      {status === "failed" && (
+        <div className="space-y-4">
+          <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+            ❌ {error}
+          </div>
+          <button onClick={handleFetch} className="btn-secondary text-xs">
+            ↺ Try Again
+          </button>
+        </div>
+      )}
+
+      {/* Completed */}
+      {status === "completed" && results && (
         <div className="space-y-6">
 
-          {/* Patient Summary */}
-          <div>
-            <h4 className="text-sm font-semibold text-gray-700 mb-2">
-              Your Clinical Profile Summary
-            </h4>
-            <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 text-sm text-gray-700 leading-relaxed">
-              {data.summary}
+          {/* Recommendation */}
+          {results.recommendation && (
+            <div>
+              <h4 className="text-sm font-semibold text-gray-700 mb-2">
+                🤖 AI Recommendation
+              </h4>
+              <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+                {results.recommendation}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Matched Trials */}
-          <div>
-            <h4 className="text-sm font-semibold text-gray-700 mb-3">
-              Matched Trials
-              <span className="ml-2 text-xs font-normal text-gray-400">
-                {data.total_matches} found
-              </span>
-            </h4>
-
-            {data.matched_trials?.length === 0 ? (
-              <p className="text-sm text-gray-400">No matching trials found.</p>
-            ) : (
+          {results.retrieved_trials?.length > 0 && (
+            <div>
+              <h4 className="text-sm font-semibold text-gray-700 mb-3">
+                Matched Trials
+                <span className="ml-2 text-xs font-normal text-gray-400">
+                  {results.retrieved_trials.length} found
+                </span>
+              </h4>
               <div className="space-y-2">
-                {data.matched_trials?.map((nctId, i) => (
-                  <a
-                    key={nctId}
-                    href={`https://clinicaltrials.gov/study/${nctId}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:border-blue-400 hover:bg-blue-50 transition-colors group"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs font-bold text-gray-400 w-5">
-                        #{i + 1}
-                      </span>
-                      <div>
-                        <p className="text-sm font-medium text-gray-800 font-mono">
-                          {nctId}
-                        </p>
-                        <p className="text-xs text-gray-400 mt-0.5">
-                          View on ClinicalTrials.gov ↗
-                        </p>
+                {results.retrieved_trials.map((trial, i) => {
+                  const nctId = trial.nct_number || trial._doc_id;
+                  const title = trial.study_title || trial.title || nctId;
+                  return (
+                    <a
+                      key={nctId}
+                      href={`https://clinicaltrials.gov/study/${nctId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:border-blue-400 hover:bg-blue-50 transition-colors group"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs font-bold text-gray-400 w-5">#{i + 1}</span>
+                        <div>
+                          <p className="text-sm font-medium text-gray-800">{title}</p>
+                          <p className="text-xs text-gray-400 font-mono mt-0.5">{nctId} · View on ClinicalTrials.gov ↗</p>
+                        </div>
                       </div>
-                    </div>
-                    <span className="text-blue-500 text-sm opacity-0 group-hover:opacity-100 transition-opacity">
-                      →
-                    </span>
-                  </a>
-                ))}
+                      <span className="text-blue-500 text-sm opacity-0 group-hover:opacity-100 transition-opacity">→</span>
+                    </a>
+                  );
+                })}
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
-          {/* Regenerate */}
-          <button
-            onClick={handleFetch}
-            disabled={loading}
-            className="btn-secondary text-xs"
-          >
-            {loading ? "Finding matches..." : "↺ Refresh Matches"}
-          </button>
+          {/* Generated at + Refresh */}
+          <div className="flex items-center justify-between">
+            {results.generated_at && (
+              <p className="text-xs text-gray-400">
+                Generated: {new Date(results.generated_at).toLocaleString()}
+              </p>
+            )}
+            <button onClick={handleFetch} className="btn-secondary text-xs">
+              ↺ Refresh Matches
+            </button>
+          </div>
         </div>
       )}
+
     </Section>
   );
 }
