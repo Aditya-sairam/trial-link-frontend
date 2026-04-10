@@ -184,28 +184,43 @@ function TrialSuggestionsTab() {
                 </span>
               </h4>
               <div className="space-y-2">
-                {results.retrieved_trials.map((trial, i) => {
-                  const nctId = trial.nct_number || trial._doc_id;
-                  const title = trial.study_title || trial.title || nctId;
-                  return (
-                    <a
-                      key={nctId}
-                      href={`https://clinicaltrials.gov/study/${nctId}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:border-blue-400 hover:bg-blue-50 transition-colors group"
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="text-xs font-bold text-gray-400 w-5">#{i + 1}</span>
-                        <div>
-                          <p className="text-sm font-medium text-gray-800">{title}</p>
-                          <p className="text-xs text-gray-400 font-mono mt-0.5">{nctId} · View on ClinicalTrials.gov ↗</p>
+
+            {results.retrieved_trials.map((trial, i) => {
+              const nctId = trial.nct_number || trial._doc_id;
+              const title = trial.study_title || trial.title || nctId;
+              const summary = trial.brief_summary;
+              return (
+                <a
+                  key={nctId}
+                  href={`https://clinicaltrials.gov/study/${nctId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-start justify-between p-3 bg-white border border-gray-200 rounded-lg hover:border-blue-400 hover:bg-blue-50 transition-colors group"
+                >
+                  <div className="flex items-start gap-3 flex-1 min-w-0">
+                    <span className="text-xs font-bold text-gray-400 w-5 shrink-0 mt-0.5">#{i + 1}</span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-800">{title}</p>
+                      <p className="text-xs text-gray-400 font-mono mt-0.5">{nctId} · View on ClinicalTrials.gov ↗</p>
+                      {summary && (
+                        <p className="text-xs text-gray-500 mt-1.5 leading-relaxed line-clamp-3">
+                          {summary}
+                        </p>
+                      )}
+                      {trial.eligibility_criteria && (
+                        <div className="mt-2">
+                          <p className="text-xs font-bold text-gray-700">Eligibility Criteria</p>
+                          <p className="text-xs text-gray-500 mt-0.5 leading-relaxed line-clamp-4">
+                            {trial.eligibility_criteria}
+                          </p>
                         </div>
-                      </div>
-                      <span className="text-blue-500 text-sm opacity-0 group-hover:opacity-100 transition-opacity">→</span>
-                    </a>
-                  );
-                })}
+                      )}
+                    </div>
+                  </div>
+                  <span className="text-blue-500 text-sm opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-2 mt-0.5">→</span>
+                </a>
+              );
+            })}
               </div>
             </div>
           )}

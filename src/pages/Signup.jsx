@@ -94,6 +94,7 @@ export default function Signup() {
             disabled={loading}
             className="btn-primary w-full py-2.5 mt-2"
           >
+            console.log("innnnnn signuppppp");
             {loading ? "Creating account..." : "Create Account"}
           </button>
         </form>
