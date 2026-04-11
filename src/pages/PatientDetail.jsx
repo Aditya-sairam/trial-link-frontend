@@ -2,8 +2,6 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { getPatient, getTrialSuggestions, getTrialSuggestionsResults } from "../services/patientApi";
 
-// ── Small reusable components ─────────────────────────────────────────────────
-
 const Badge = ({ children, color = "gray" }) => {
   const colors = {
     gray:   "bg-gray-100 text-gray-600",
@@ -38,26 +36,42 @@ const Field = ({ label, value }) => (
   </div>
 );
 
-// ── Status → badge color mapping ──────────────────────────────────────────────
 const conditionColor = { active: "red", resolved: "green", remission: "blue", recurrence: "yellow" };
 const medColor = { active: "blue", stopped: "gray", completed: "green" };
 const critColor = { high: "red", low: "yellow", "unable-to-assess": "gray" };
 
-// ── Helper: parse ELIGIBLE/INELIGIBLE verdicts from recommendation text ───────
 const parseEligibilityFromRecommendation = (recommendation) => {
   if (!recommendation) return {};
   const eligibilityMap = {};
-  recommendation.split(/---/).forEach(block => {
+  recommendation.split("---").forEach(block => {
     const nctMatch = block.match(/NCT\d+/);
-    const verdictMatch = block.match(/VERDICT:\s*(ELIGIBLE|INELIGIBLE)/i);
-    if (nctMatch && verdictMatch) {
-      eligibilityMap[nctMatch[0]] = verdictMatch[1].toUpperCase() === "ELIGIBLE";
+    if (nctMatch) {
+      eligibilityMap[nctMatch[0]] = !block.includes("VERDICT: INELIGIBLE");
     }
   });
   return eligibilityMap;
 };
 
-// ── Trial Suggestions Tab ─────────────────────────────────────────────────────
+const filterRecommendationToEligible = (recommendation) => {
+  if (!recommendation) return "";
+
+  // Match full trial blocks
+  const trialBlocks = recommendation.match(/\*\*Trial[\s\S]*?(?=\n---|\nDisclaimer:|$)/g);
+
+  if (!trialBlocks) return "";
+
+  const filtered = trialBlocks.filter(block => {
+    const verdictMatch = block.match(/VERDICT:\s*(\w+)/i);
+    if (!verdictMatch) return false;
+
+    const verdict = verdictMatch[1].toLowerCase();
+
+    return verdict === "eligible"; // ONLY eligible
+  });
+
+  return filtered.join("\n\n---\n\n").trim();
+};
+
 function TrialSuggestionsTab() {
   const [status, setStatus]             = useState("idle");
   const [results, setResults]           = useState(null);
@@ -114,19 +128,13 @@ function TrialSuggestionsTab() {
   return (
     <Section title="🧬 Clinical Trial Suggestions">
 
-      {/* Idle */}
       {status === "idle" && (
         <div className="text-center py-10 space-y-4">
-          <p className="text-gray-500 text-sm">
-            Click below to find clinical trials that match your profile.
-          </p>
-          <button onClick={handleFetch} className="btn-primary px-6 py-2.5">
-            Find Matching Trials
-          </button>
+          <p className="text-gray-500 text-sm">Click below to find clinical trials that match your profile.</p>
+          <button onClick={handleFetch} className="btn-primary px-6 py-2.5">Find Matching Trials</button>
         </div>
       )}
 
-      {/* Submitting */}
       {status === "submitting" && (
         <div className="text-center py-10 space-y-3">
           <p className="text-2xl animate-spin inline-block">⏳</p>
@@ -134,53 +142,39 @@ function TrialSuggestionsTab() {
         </div>
       )}
 
-      {/* Processing */}
       {status === "processing" && (
         <div className="text-center py-10 space-y-4">
           <div className="flex justify-center gap-1">
             {[0, 1, 2].map(i => (
-              <div
-                key={i}
-                className="w-2.5 h-2.5 bg-blue-500 rounded-full animate-bounce"
-                style={{ animationDelay: `${i * 0.15}s` }}
-              />
+              <div key={i} className="w-2.5 h-2.5 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
             ))}
           </div>
           <p className="text-gray-600 text-sm font-medium">Analyzing your profile...</p>
-          <p className="text-gray-400 text-xs">
-            Matching against clinical trials database. This may take 30-60 seconds.
-          </p>
+          <p className="text-gray-400 text-xs">Matching against clinical trials database. This may take 30-60 seconds.</p>
         </div>
       )}
 
-      {/* Error */}
       {status === "failed" && (
         <div className="space-y-4">
-          <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-            ❌ {error}
-          </div>
-          <button onClick={handleFetch} className="btn-secondary text-xs">
-            ↺ Try Again
-          </button>
+          <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">❌ {error}</div>
+          <button onClick={handleFetch} className="btn-secondary text-xs">↺ Try Again</button>
         </div>
       )}
 
-      {/* Completed */}
       {status === "completed" && results && (() => {
-        const eligibilityMap = parseEligibilityFromRecommendation(results.recommendation);
-        const eligibleTrials = (results.retrieved_trials ?? []).filter(
-          t => eligibilityMap[t.nct_number] === true
-        );
+        const eligibilityMap         = parseEligibilityFromRecommendation(results.recommendation);
+        const filteredRecommendation = filterRecommendationToEligible(results.recommendation);
+        const eligibleTrials         = (results.retrieved_trials ?? []).filter(t => eligibilityMap[t.nct_number] === true);
 
         return (
           <div className="space-y-6">
 
-            {/* 1. Full AI Recommendation */}
-            {results.recommendation && (
+            {/* 1. Eligible-only AI Recommendation */}
+            {filteredRecommendation && (
               <div>
                 <h4 className="text-sm font-semibold text-gray-700 mb-2">🤖 AI Recommendation</h4>
                 <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
-                  {results.recommendation}
+                  {filteredRecommendation}
                 </div>
               </div>
             )}
@@ -193,11 +187,8 @@ function TrialSuggestionsTab() {
                   {eligibleTrials.length} of {results.retrieved_trials?.length ?? 0} trials
                 </span>
               </h4>
-
               {eligibleTrials.length === 0 ? (
-                <p className="text-sm text-gray-400 text-center py-6">
-                  No eligible trials found for this patient.
-                </p>
+                <p className="text-sm text-gray-400 text-center py-6">No eligible trials found for this patient.</p>
               ) : (
                 <div className="space-y-2">
                   {eligibleTrials.map((trial, i) => {
@@ -217,17 +208,7 @@ function TrialSuggestionsTab() {
                             <p className="text-sm font-medium text-gray-800">{title}</p>
                             <p className="text-xs text-gray-400 font-mono mt-0.5">{nctId} · View on ClinicalTrials.gov ↗</p>
                             {trial.brief_summary && (
-                              <p className="text-xs text-gray-500 mt-1.5 leading-relaxed line-clamp-3">
-                                {trial.brief_summary}
-                              </p>
-                            )}
-                            {trial.eligibility_criteria && (
-                              <div className="mt-2">
-                                <p className="text-xs font-bold text-gray-700">Eligibility Criteria</p>
-                                <p className="text-xs text-gray-500 mt-0.5 leading-relaxed line-clamp-4">
-                                  {trial.eligibility_criteria}
-                                </p>
-                              </div>
+                              <p className="text-xs text-gray-500 mt-1.5 leading-relaxed line-clamp-3">{trial.brief_summary}</p>
                             )}
                           </div>
                         </div>
@@ -242,13 +223,9 @@ function TrialSuggestionsTab() {
             {/* 3. Footer */}
             <div className="flex items-center justify-between">
               {results.generated_at && (
-                <p className="text-xs text-gray-400">
-                  Generated: {new Date(results.generated_at).toLocaleString()}
-                </p>
+                <p className="text-xs text-gray-400">Generated: {new Date(results.generated_at).toLocaleString()}</p>
               )}
-              <button onClick={handleFetch} className="btn-secondary text-xs">
-                ↺ Refresh Matches
-              </button>
+              <button onClick={handleFetch} className="btn-secondary text-xs">↺ Refresh Matches</button>
             </div>
 
           </div>
@@ -259,7 +236,6 @@ function TrialSuggestionsTab() {
   );
 }
 
-// ── Main Component ────────────────────────────────────────────────────────────
 export default function PatientDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -293,19 +269,15 @@ export default function PatientDetail() {
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
-      {/* Back + Edit buttons */}
       <div className="flex items-center justify-between">
-        <button onClick={() => navigate("/patients")}
-          className="text-sm text-blue-600 hover:underline flex items-center gap-1">
+        <button onClick={() => navigate("/patients")} className="text-sm text-blue-600 hover:underline flex items-center gap-1">
           ← Back to Patients
         </button>
-        <button onClick={() => navigate(`/patients/${id}/edit`)}
-          className="btn-primary">
+        <button onClick={() => navigate(`/patients/${id}/edit`)} className="btn-primary">
           ✏️ Edit Patient
         </button>
       </div>
 
-      {/* Demographics header card */}
       <Section title="Patient Demographics">
         <div className="grid grid-cols-3 gap-6">
           <Field label="Patient ID" value={<span className="font-mono text-xs">{d.patient_id}</span>} />
@@ -320,31 +292,24 @@ export default function PatientDetail() {
         </div>
       </Section>
 
-      {/* Tabs */}
       <div className="border-b border-gray-200 flex gap-1 overflow-x-auto">
         {TABS.map(tab => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
             className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap ${
-              activeTab === tab.key
-                ? "border-blue-600 text-blue-600"
-                : "border-transparent text-gray-500 hover:text-gray-700"
+              activeTab === tab.key ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"
             }`}
           >
             {tab.label}
             {tab.count !== undefined && (
-              <span className="ml-1.5 text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">
-                {tab.count}
-              </span>
+              <span className="ml-1.5 text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">{tab.count}</span>
             )}
           </button>
         ))}
       </div>
 
-      {/* Tab content */}
       <div>
-        {/* Conditions */}
         {activeTab === "conditions" && (
           <Section title="Conditions" count={patient.conditions?.length}>
             {patient.conditions?.length === 0
@@ -368,7 +333,6 @@ export default function PatientDetail() {
           </Section>
         )}
 
-        {/* Medications */}
         {activeTab === "medications" && (
           <Section title="Medications" count={patient.medications?.length}>
             {patient.medications?.length === 0
@@ -390,7 +354,6 @@ export default function PatientDetail() {
           </Section>
         )}
 
-        {/* Observations */}
         {activeTab === "observations" && (
           <Section title="Observations" count={patient.observations?.length}>
             {patient.observations?.length === 0
@@ -407,18 +370,14 @@ export default function PatientDetail() {
                     <tbody className="divide-y divide-gray-50">
                       {patient.observations.map((o, i) => {
                         const isAbnormal = o.value != null && o.reference_range_low != null && o.reference_range_high != null
-                          ? o.value < o.reference_range_low || o.value > o.reference_range_high
-                          : null;
+                          ? o.value < o.reference_range_low || o.value > o.reference_range_high : null;
                         return (
                           <tr key={i}>
                             <td className="py-2 pr-4 font-medium">{o.display_name}</td>
-                            <td className="py-2 pr-4">
-                              {o.value != null ? `${o.value} ${o.unit || ""}` : o.value_string || "—"}
-                            </td>
+                            <td className="py-2 pr-4">{o.value != null ? `${o.value} ${o.unit || ""}` : o.value_string || "—"}</td>
                             <td className="py-2 pr-4 text-gray-400 text-xs">
                               {o.reference_range_low != null && o.reference_range_high != null
-                                ? `${o.reference_range_low} – ${o.reference_range_high} ${o.unit || ""}`
-                                : "—"}
+                                ? `${o.reference_range_low} – ${o.reference_range_high} ${o.unit || ""}` : "—"}
                             </td>
                             <td className="py-2 pr-4 text-gray-400 text-xs">{o.date}</td>
                             <td className="py-2">
@@ -436,7 +395,6 @@ export default function PatientDetail() {
           </Section>
         )}
 
-        {/* Procedures */}
         {activeTab === "procedures" && (
           <Section title="Procedures" count={patient.procedures?.length}>
             {patient.procedures?.length === 0
@@ -459,7 +417,6 @@ export default function PatientDetail() {
           </Section>
         )}
 
-        {/* Allergies */}
         {activeTab === "allergies" && (
           <Section title="Allergies" count={patient.allergies?.length}>
             {patient.allergies?.length === 0
@@ -477,9 +434,7 @@ export default function PatientDetail() {
                         )}
                         {a.onset_date && <p className="text-xs text-gray-400">Since: {a.onset_date}</p>}
                       </div>
-                      {a.criticality && (
-                        <Badge color={critColor[a.criticality] || "gray"}>{a.criticality}</Badge>
-                      )}
+                      {a.criticality && <Badge color={critColor[a.criticality] || "gray"}>{a.criticality}</Badge>}
                     </div>
                   ))}
                 </div>
@@ -487,7 +442,6 @@ export default function PatientDetail() {
           </Section>
         )}
 
-        {/* Lifestyle */}
         {activeTab === "lifestyle" && (
           <Section title="Lifestyle Factors">
             {!patient.lifestyle
@@ -502,7 +456,6 @@ export default function PatientDetail() {
           </Section>
         )}
 
-        {/* Trial Suggestions */}
         {activeTab === "trial-suggestions" && <TrialSuggestionsTab />}
       </div>
     </div>

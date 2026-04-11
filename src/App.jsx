@@ -32,7 +32,10 @@ function Navbar() {
   return (
     <nav className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
       <div className="flex items-center gap-4">
-        <span className="text-lg font-bold text-blue-700 mr-4">🔬 Trial Link</span>
+        <div className="flex items-center gap-2 mr-4">
+          <img src="/logo.jpeg" alt="Trial Link" className="h-8" />
+          <span className="text-lg font-bold text-blue-700">Trial Link</span>
+        </div>
         {role === "admin" && (
           <>
             <NavItem to="/patients" label="All Patients" />
