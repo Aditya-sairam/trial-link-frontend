@@ -43,14 +43,27 @@ const conditionColor = { active: "red", resolved: "green", remission: "blue", re
 const medColor = { active: "blue", stopped: "gray", completed: "green" };
 const critColor = { high: "red", low: "yellow", "unable-to-assess": "gray" };
 
+// ── Helper: parse ELIGIBLE/INELIGIBLE verdicts from recommendation text ───────
+const parseEligibilityFromRecommendation = (recommendation) => {
+  if (!recommendation) return {};
+  const eligibilityMap = {};
+  recommendation.split(/---/).forEach(block => {
+    const nctMatch = block.match(/NCT\d+/);
+    const verdictMatch = block.match(/VERDICT:\s*(ELIGIBLE|INELIGIBLE)/i);
+    if (nctMatch && verdictMatch) {
+      eligibilityMap[nctMatch[0]] = verdictMatch[1].toUpperCase() === "ELIGIBLE";
+    }
+  });
+  return eligibilityMap;
+};
+
 // ── Trial Suggestions Tab ─────────────────────────────────────────────────────
 function TrialSuggestionsTab() {
-  const [status, setStatus]       = useState("idle");    // idle | submitting | processing | completed | failed
-  const [results, setResults]     = useState(null);
-  const [error, setError]         = useState(null);
+  const [status, setStatus]             = useState("idle");
+  const [results, setResults]           = useState(null);
+  const [error, setError]               = useState(null);
   const [pollInterval, setPollInterval] = useState(null);
 
-  // Cleanup polling on unmount
   useEffect(() => {
     return () => { if (pollInterval) clearInterval(pollInterval); };
   }, [pollInterval]);
@@ -65,7 +78,6 @@ function TrialSuggestionsTab() {
       try {
         const data = await getTrialSuggestionsResults();
         console.log("Polling result:", data);
-
         if (["completed", "guardrail_flagged", "guardrail_blocked", "failed"].includes(data.status)) {
           setResults(data);
           setStatus("completed");
@@ -75,29 +87,24 @@ function TrialSuggestionsTab() {
           setStatus("failed");
           stopPolling(intervalId);
         }
-        // if "processing" or "not_started" — keep polling
       } catch (err) {
         setError(err.message);
         setStatus("failed");
         stopPolling(intervalId);
       }
-    }, 4000); // poll every 4 seconds
-
+    }, 4000);
     setPollInterval(intervalId);
   };
 
   const handleFetch = async () => {
-    // Stop any existing poll
     if (pollInterval) stopPolling(pollInterval);
-
     setStatus("submitting");
     setError(null);
     setResults(null);
-
     try {
-      await getTrialSuggestions(); // triggers Pub/Sub
+      await getTrialSuggestions();
       setStatus("processing");
-      startPolling();              // start polling for results
+      startPolling();
     } catch (err) {
       setError(err.message);
       setStatus("failed");
@@ -107,7 +114,7 @@ function TrialSuggestionsTab() {
   return (
     <Section title="🧬 Clinical Trial Suggestions">
 
-      {/* Initial state */}
+      {/* Idle */}
       {status === "idle" && (
         <div className="text-center py-10 space-y-4">
           <p className="text-gray-500 text-sm">
@@ -127,7 +134,7 @@ function TrialSuggestionsTab() {
         </div>
       )}
 
-      {/* Processing — show animated waiting state */}
+      {/* Processing */}
       {status === "processing" && (
         <div className="text-center py-10 space-y-4">
           <div className="flex justify-center gap-1">
@@ -159,85 +166,94 @@ function TrialSuggestionsTab() {
       )}
 
       {/* Completed */}
-      {status === "completed" && results && (
-        <div className="space-y-6">
+      {status === "completed" && results && (() => {
+        const eligibilityMap = parseEligibilityFromRecommendation(results.recommendation);
+        const eligibleTrials = (results.retrieved_trials ?? []).filter(
+          t => eligibilityMap[t.nct_number] === true
+        );
 
-          {/* Recommendation */}
-          {results.recommendation && (
-            <div>
-              <h4 className="text-sm font-semibold text-gray-700 mb-2">
-                🤖 AI Recommendation
-              </h4>
-              <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
-                {results.recommendation}
+        return (
+          <div className="space-y-6">
+
+            {/* 1. Full AI Recommendation */}
+            {results.recommendation && (
+              <div>
+                <h4 className="text-sm font-semibold text-gray-700 mb-2">🤖 AI Recommendation</h4>
+                <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+                  {results.recommendation}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Matched Trials */}
-          {results.retrieved_trials?.length > 0 && (
+            {/* 2. Eligible Trials List */}
             <div>
               <h4 className="text-sm font-semibold text-gray-700 mb-3">
-                Matched Trials
+                ✅ Eligible Trials
                 <span className="ml-2 text-xs font-normal text-gray-400">
-                  {results.retrieved_trials.length} found
+                  {eligibleTrials.length} of {results.retrieved_trials?.length ?? 0} trials
                 </span>
               </h4>
-              <div className="space-y-2">
 
-            {results.retrieved_trials.map((trial, i) => {
-              const nctId = trial.nct_number || trial._doc_id;
-              const title = trial.study_title || trial.title || nctId;
-              const summary = trial.brief_summary;
-              return (
-                <a
-                  key={nctId}
-                  href={`https://clinicaltrials.gov/study/${nctId}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-start justify-between p-3 bg-white border border-gray-200 rounded-lg hover:border-blue-400 hover:bg-blue-50 transition-colors group"
-                >
-                  <div className="flex items-start gap-3 flex-1 min-w-0">
-                    <span className="text-xs font-bold text-gray-400 w-5 shrink-0 mt-0.5">#{i + 1}</span>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-gray-800">{title}</p>
-                      <p className="text-xs text-gray-400 font-mono mt-0.5">{nctId} · View on ClinicalTrials.gov ↗</p>
-                      {summary && (
-                        <p className="text-xs text-gray-500 mt-1.5 leading-relaxed line-clamp-3">
-                          {summary}
-                        </p>
-                      )}
-                      {trial.eligibility_criteria && (
-                        <div className="mt-2">
-                          <p className="text-xs font-bold text-gray-700">Eligibility Criteria</p>
-                          <p className="text-xs text-gray-500 mt-0.5 leading-relaxed line-clamp-4">
-                            {trial.eligibility_criteria}
-                          </p>
+              {eligibleTrials.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-6">
+                  No eligible trials found for this patient.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {eligibleTrials.map((trial, i) => {
+                    const nctId = trial.nct_number || trial._doc_id;
+                    const title = trial.study_title || trial.title || nctId;
+                    return (
+                      <a
+                        key={nctId}
+                        href={`https://clinicaltrials.gov/study/${nctId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-start justify-between p-3 bg-white border border-gray-200 rounded-lg hover:border-blue-400 hover:bg-blue-50 transition-colors group"
+                      >
+                        <div className="flex items-start gap-3 flex-1 min-w-0">
+                          <span className="text-xs font-bold text-gray-400 w-5 shrink-0 mt-0.5">#{i + 1}</span>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-gray-800">{title}</p>
+                            <p className="text-xs text-gray-400 font-mono mt-0.5">{nctId} · View on ClinicalTrials.gov ↗</p>
+                            {trial.brief_summary && (
+                              <p className="text-xs text-gray-500 mt-1.5 leading-relaxed line-clamp-3">
+                                {trial.brief_summary}
+                              </p>
+                            )}
+                            {trial.eligibility_criteria && (
+                              <div className="mt-2">
+                                <p className="text-xs font-bold text-gray-700">Eligibility Criteria</p>
+                                <p className="text-xs text-gray-500 mt-0.5 leading-relaxed line-clamp-4">
+                                  {trial.eligibility_criteria}
+                                </p>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      )}
-                    </div>
-                  </div>
-                  <span className="text-blue-500 text-sm opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-2 mt-0.5">→</span>
-                </a>
-              );
-            })}
-              </div>
+                        <span className="text-blue-500 text-sm opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-2 mt-0.5">→</span>
+                      </a>
+                    );
+                  })}
+                </div>
+              )}
             </div>
-          )}
 
-          {/* Generated at + Refresh */}
-          <div className="flex items-center justify-between">
-            {results.generated_at && (
-              <p className="text-xs text-gray-400">
-                Generated: {new Date(results.generated_at).toLocaleString()}
-              </p>
-            )}
-            <button onClick={handleFetch} className="btn-secondary text-xs">
-              ↺ Refresh Matches
-            </button>
+            {/* 3. Footer */}
+            <div className="flex items-center justify-between">
+              {results.generated_at && (
+                <p className="text-xs text-gray-400">
+                  Generated: {new Date(results.generated_at).toLocaleString()}
+                </p>
+              )}
+              <button onClick={handleFetch} className="btn-secondary text-xs">
+                ↺ Refresh Matches
+              </button>
+            </div>
+
           </div>
-        </div>
-      )}
+        );
+      })()}
 
     </Section>
   );
