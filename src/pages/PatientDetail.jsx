@@ -39,12 +39,10 @@ const Field = ({ label, value }) => (
   </div>
 );
 
-// ── Status → badge color mapping ──────────────────────────────────────────────
 const conditionColor = { active: "red", resolved: "green", remission: "blue", recurrence: "yellow" };
 const medColor = { active: "blue", stopped: "gray", completed: "green" };
 const critColor = { high: "red", low: "yellow", "unable-to-assess": "gray" };
 
-// ── Main Component ────────────────────────────────────────────────────────────
 export default function PatientDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -78,19 +76,15 @@ export default function PatientDetail() {
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
-      {/* Back + Edit buttons */}
       <div className="flex items-center justify-between">
-        <button onClick={() => navigate("/patients")}
-          className="text-sm text-blue-600 hover:underline flex items-center gap-1">
+        <button onClick={() => navigate("/patients")} className="text-sm text-blue-600 hover:underline flex items-center gap-1">
           ← Back to Patients
         </button>
-        <button onClick={() => navigate(`/patients/${id}/edit`)}
-          className="btn-primary">
+        <button onClick={() => navigate(`/patients/${id}/edit`)} className="btn-primary">
           ✏️ Edit Patient
         </button>
       </div>
 
-      {/* Demographics header card */}
       <Section title="Patient Demographics">
         <div className="grid grid-cols-3 gap-6">
           <Field label="Patient ID" value={<span className="font-mono text-xs">{d.patient_id}</span>} />
@@ -105,31 +99,24 @@ export default function PatientDetail() {
         </div>
       </Section>
 
-      {/* Tabs */}
       <div className="border-b border-gray-200 flex gap-1 overflow-x-auto">
         {TABS.map(tab => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
             className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap ${
-              activeTab === tab.key
-                ? "border-blue-600 text-blue-600"
-                : "border-transparent text-gray-500 hover:text-gray-700"
+              activeTab === tab.key ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"
             }`}
           >
             {tab.label}
             {tab.count !== undefined && (
-              <span className="ml-1.5 text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">
-                {tab.count}
-              </span>
+              <span className="ml-1.5 text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">{tab.count}</span>
             )}
           </button>
         ))}
       </div>
 
-      {/* Tab content */}
       <div>
-        {/* Conditions */}
         {activeTab === "conditions" && (
           <Section title="Conditions" count={patient.conditions?.length}>
             {patient.conditions?.length === 0
@@ -153,7 +140,6 @@ export default function PatientDetail() {
           </Section>
         )}
 
-        {/* Medications */}
         {activeTab === "medications" && (
           <Section title="Medications" count={patient.medications?.length}>
             {patient.medications?.length === 0
@@ -175,7 +161,6 @@ export default function PatientDetail() {
           </Section>
         )}
 
-        {/* Observations */}
         {activeTab === "observations" && (
           <Section title="Observations" count={patient.observations?.length}>
             {patient.observations?.length === 0
@@ -192,18 +177,14 @@ export default function PatientDetail() {
                     <tbody className="divide-y divide-gray-50">
                       {patient.observations.map((o, i) => {
                         const isAbnormal = o.value != null && o.reference_range_low != null && o.reference_range_high != null
-                          ? o.value < o.reference_range_low || o.value > o.reference_range_high
-                          : null;
+                          ? o.value < o.reference_range_low || o.value > o.reference_range_high : null;
                         return (
                           <tr key={i}>
                             <td className="py-2 pr-4 font-medium">{o.display_name}</td>
-                            <td className="py-2 pr-4">
-                              {o.value != null ? `${o.value} ${o.unit || ""}` : o.value_string || "—"}
-                            </td>
+                            <td className="py-2 pr-4">{o.value != null ? `${o.value} ${o.unit || ""}` : o.value_string || "—"}</td>
                             <td className="py-2 pr-4 text-gray-400 text-xs">
                               {o.reference_range_low != null && o.reference_range_high != null
-                                ? `${o.reference_range_low} – ${o.reference_range_high} ${o.unit || ""}`
-                                : "—"}
+                                ? `${o.reference_range_low} – ${o.reference_range_high} ${o.unit || ""}` : "—"}
                             </td>
                             <td className="py-2 pr-4 text-gray-400 text-xs">{o.date}</td>
                             <td className="py-2">
@@ -221,7 +202,6 @@ export default function PatientDetail() {
           </Section>
         )}
 
-        {/* Procedures */}
         {activeTab === "procedures" && (
           <Section title="Procedures" count={patient.procedures?.length}>
             {patient.procedures?.length === 0
@@ -244,7 +224,6 @@ export default function PatientDetail() {
           </Section>
         )}
 
-        {/* Allergies */}
         {activeTab === "allergies" && (
           <Section title="Allergies" count={patient.allergies?.length}>
             {patient.allergies?.length === 0
@@ -262,9 +241,7 @@ export default function PatientDetail() {
                         )}
                         {a.onset_date && <p className="text-xs text-gray-400">Since: {a.onset_date}</p>}
                       </div>
-                      {a.criticality && (
-                        <Badge color={critColor[a.criticality] || "gray"}>{a.criticality}</Badge>
-                      )}
+                      {a.criticality && <Badge color={critColor[a.criticality] || "gray"}>{a.criticality}</Badge>}
                     </div>
                   ))}
                 </div>
@@ -272,7 +249,6 @@ export default function PatientDetail() {
           </Section>
         )}
 
-        {/* Lifestyle */}
         {activeTab === "lifestyle" && (
           <Section title="Lifestyle Factors">
             {!patient.lifestyle
@@ -287,7 +263,6 @@ export default function PatientDetail() {
           </Section>
         )}
 
-        {/* Trial Suggestions */}
         {activeTab === "trial-suggestions" && <TrialSuggestionsTab />}
       </div>
     </div>
