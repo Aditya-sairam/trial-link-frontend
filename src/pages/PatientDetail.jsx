@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getPatient, getTrialSuggestions, getTrialSuggestionsResults } from "../services/patientApi";
+import { getPatient } from "../services/patientApi";
+import TrialSuggestionsTab from "./TrialSuggestionsTab";
 
 // ── Small reusable components ─────────────────────────────────────────────────
 
@@ -42,206 +43,6 @@ const Field = ({ label, value }) => (
 const conditionColor = { active: "red", resolved: "green", remission: "blue", recurrence: "yellow" };
 const medColor = { active: "blue", stopped: "gray", completed: "green" };
 const critColor = { high: "red", low: "yellow", "unable-to-assess": "gray" };
-
-// ── Trial Suggestions Tab ─────────────────────────────────────────────────────
-function TrialSuggestionsTab() {
-  const [status, setStatus]       = useState("idle");    // idle | submitting | processing | completed | failed
-  const [results, setResults]     = useState(null);
-  const [error, setError]         = useState(null);
-  const [pollInterval, setPollInterval] = useState(null);
-
-  // Cleanup polling on unmount
-  useEffect(() => {
-    return () => { if (pollInterval) clearInterval(pollInterval); };
-  }, [pollInterval]);
-
-  const stopPolling = (intervalId) => {
-    clearInterval(intervalId);
-    setPollInterval(null);
-  };
-
-  const startPolling = () => {
-    const intervalId = setInterval(async () => {
-      try {
-        const data = await getTrialSuggestionsResults();
-        console.log("Polling result:", data);
-
-        if (["completed", "guardrail_flagged", "guardrail_blocked", "failed"].includes(data.status)) {
-          setResults(data);
-          setStatus("completed");
-          stopPolling(intervalId);
-        } else if (data.status === "failed") {
-          setError(data.error || "Something went wrong.");
-          setStatus("failed");
-          stopPolling(intervalId);
-        }
-        // if "processing" or "not_started" — keep polling
-      } catch (err) {
-        setError(err.message);
-        setStatus("failed");
-        stopPolling(intervalId);
-      }
-    }, 4000); // poll every 4 seconds
-
-    setPollInterval(intervalId);
-  };
-
-  const handleFetch = async () => {
-    // Stop any existing poll
-    if (pollInterval) stopPolling(pollInterval);
-
-    setStatus("submitting");
-    setError(null);
-    setResults(null);
-
-    try {
-      await getTrialSuggestions(); // triggers Pub/Sub
-      setStatus("processing");
-      startPolling();              // start polling for results
-    } catch (err) {
-      setError(err.message);
-      setStatus("failed");
-    }
-  };
-
-  return (
-    <Section title="🧬 Clinical Trial Suggestions">
-
-      {/* Initial state */}
-      {status === "idle" && (
-        <div className="text-center py-10 space-y-4">
-          <p className="text-gray-500 text-sm">
-            Click below to find clinical trials that match your profile.
-          </p>
-          <button onClick={handleFetch} className="btn-primary px-6 py-2.5">
-            Find Matching Trials
-          </button>
-        </div>
-      )}
-
-      {/* Submitting */}
-      {status === "submitting" && (
-        <div className="text-center py-10 space-y-3">
-          <p className="text-2xl animate-spin inline-block">⏳</p>
-          <p className="text-gray-500 text-sm">Submitting your request...</p>
-        </div>
-      )}
-
-      {/* Processing — show animated waiting state */}
-      {status === "processing" && (
-        <div className="text-center py-10 space-y-4">
-          <div className="flex justify-center gap-1">
-            {[0, 1, 2].map(i => (
-              <div
-                key={i}
-                className="w-2.5 h-2.5 bg-blue-500 rounded-full animate-bounce"
-                style={{ animationDelay: `${i * 0.15}s` }}
-              />
-            ))}
-          </div>
-          <p className="text-gray-600 text-sm font-medium">Analyzing your profile...</p>
-          <p className="text-gray-400 text-xs">
-            Matching against clinical trials database. This may take 30-60 seconds.
-          </p>
-        </div>
-      )}
-
-      {/* Error */}
-      {status === "failed" && (
-        <div className="space-y-4">
-          <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-            ❌ {error}
-          </div>
-          <button onClick={handleFetch} className="btn-secondary text-xs">
-            ↺ Try Again
-          </button>
-        </div>
-      )}
-
-      {/* Completed */}
-      {status === "completed" && results && (
-        <div className="space-y-6">
-
-          {/* Recommendation */}
-          {results.recommendation && (
-            <div>
-              <h4 className="text-sm font-semibold text-gray-700 mb-2">
-                🤖 AI Recommendation
-              </h4>
-              <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
-                {results.recommendation}
-              </div>
-            </div>
-          )}
-
-          {/* Matched Trials */}
-          {results.retrieved_trials?.length > 0 && (
-            <div>
-              <h4 className="text-sm font-semibold text-gray-700 mb-3">
-                Matched Trials
-                <span className="ml-2 text-xs font-normal text-gray-400">
-                  {results.retrieved_trials.length} found
-                </span>
-              </h4>
-              <div className="space-y-2">
-
-            {results.retrieved_trials.map((trial, i) => {
-              const nctId = trial.nct_number || trial._doc_id;
-              const title = trial.study_title || trial.title || nctId;
-              const summary = trial.brief_summary;
-              return (
-                <a
-                  key={nctId}
-                  href={`https://clinicaltrials.gov/study/${nctId}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-start justify-between p-3 bg-white border border-gray-200 rounded-lg hover:border-blue-400 hover:bg-blue-50 transition-colors group"
-                >
-                  <div className="flex items-start gap-3 flex-1 min-w-0">
-                    <span className="text-xs font-bold text-gray-400 w-5 shrink-0 mt-0.5">#{i + 1}</span>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-gray-800">{title}</p>
-                      <p className="text-xs text-gray-400 font-mono mt-0.5">{nctId} · View on ClinicalTrials.gov ↗</p>
-                      {summary && (
-                        <p className="text-xs text-gray-500 mt-1.5 leading-relaxed line-clamp-3">
-                          {summary}
-                        </p>
-                      )}
-                      {trial.eligibility_criteria && (
-                        <div className="mt-2">
-                          <p className="text-xs font-bold text-gray-700">Eligibility Criteria</p>
-                          <p className="text-xs text-gray-500 mt-0.5 leading-relaxed line-clamp-4">
-                            {trial.eligibility_criteria}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <span className="text-blue-500 text-sm opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-2 mt-0.5">→</span>
-                </a>
-              );
-            })}
-              </div>
-            </div>
-          )}
-
-          {/* Generated at + Refresh */}
-          <div className="flex items-center justify-between">
-            {results.generated_at && (
-              <p className="text-xs text-gray-400">
-                Generated: {new Date(results.generated_at).toLocaleString()}
-              </p>
-            )}
-            <button onClick={handleFetch} className="btn-secondary text-xs">
-              ↺ Refresh Matches
-            </button>
-          </div>
-        </div>
-      )}
-
-    </Section>
-  );
-}
 
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function PatientDetail() {
@@ -406,9 +207,9 @@ export default function PatientDetail() {
                             </td>
                             <td className="py-2 pr-4 text-gray-400 text-xs">{o.date}</td>
                             <td className="py-2">
-                              {isAbnormal === true && <Badge color="red">Abnormal</Badge>}
+                              {isAbnormal === true  && <Badge color="red">Abnormal</Badge>}
                               {isAbnormal === false && <Badge color="green">Normal</Badge>}
-                              {isAbnormal === null && <Badge color="gray">—</Badge>}
+                              {isAbnormal === null  && <Badge color="gray">—</Badge>}
                             </td>
                           </tr>
                         );
