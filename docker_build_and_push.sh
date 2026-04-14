@@ -49,6 +49,7 @@ gcloud auth configure-docker "$REGION-docker.pkg.dev" --quiet
 # ===== BUILD DOCKER IMAGE =====
 echo "Building Docker image..."
 docker build \
+  --no-cache \
   -f "$DOCKERFILE_PATH" \
   -t "$FULL_IMAGE_NAME" \
   "$CONTEXT_PATH"
@@ -58,3 +59,12 @@ echo "✅ Docker image built successfully."
 echo "Pushing Docker image to Artifact Registry..."
 docker push "$FULL_IMAGE_NAME"
 echo "✅ Image successfully pushed to Artifact Registry!"
+
+# ===== REDEPLOY CLOUD RUN SERVICE =====
+SERVICE_NAME="dev-trial-link-frontend-7957d26"  # ← your Cloud Run service name
+echo "Redeploying Cloud Run service..."
+gcloud run services update "$SERVICE_NAME" \
+  --image "$FULL_IMAGE_NAME" \
+  --region "$REGION" \
+  --project "$PROJECT_ID"
+echo "✅ Cloud Run service redeployed successfully!"
