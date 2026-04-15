@@ -39,7 +39,7 @@ export default function Signup() {
       <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-8 w-full max-w-md">
         {/* Header */}
         <div className="text-center mb-8">
-          <p className="text-3xl mb-2">🔬</p>
+          <img src="/logo.jpeg" alt="Trial Link" className="h-12 mx-auto mb-2" />
           <h1 className="text-2xl font-bold text-gray-900">Trial Link</h1>
           <p className="text-sm text-gray-500 mt-1">Create your account</p>
         </div>
